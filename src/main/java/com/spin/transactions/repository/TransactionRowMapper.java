@@ -7,7 +7,7 @@ import org.springframework.jdbc.core.RowMapper;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 final class TransactionRowMapper implements RowMapper<Transaction> {
@@ -32,8 +32,8 @@ final class TransactionRowMapper implements RowMapper<Transaction> {
                 rs.getString("failure_code"),
                 rs.getString("failure_message"),
                 rs.getString("idempotency_key"),
-                rs.getObject("created_at", Instant.class),
-                rs.getObject("updated_at", Instant.class)
+                rs.getObject("created_at", OffsetDateTime.class).toInstant(),
+                rs.getObject("updated_at", OffsetDateTime.class).toInstant()
         );
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,8 +98,8 @@ public class JdbcTransactionRepository implements TransactionRepository {
                     .param("failureCode", transaction.failureCode())
                     .param("failureMessage", transaction.failureMessage())
                     .param("idempotencyKey", transaction.idempotencyKey())
-                    .param("createdAt", transaction.createdAt())
-                    .param("updatedAt", transaction.updatedAt())
+                    .param("createdAt", transaction.createdAt().atOffset(ZoneOffset.UTC))
+                    .param("updatedAt", transaction.updatedAt().atOffset(ZoneOffset.UTC))
                     .update();
             return transaction;
         } catch (DuplicateKeyException e) {
@@ -166,7 +167,7 @@ public class JdbcTransactionRepository implements TransactionRepository {
                 .param("status", TransactionStatus.EXECUTED.name())
                 .param("providerTransactionId", providerTransactionId)
                 .param("balanceAfter", balanceAfter)
-                .param("updatedAt", now));
+                .param("updatedAt", now.atOffset(ZoneOffset.UTC)));
     }
 
     @Override
@@ -176,7 +177,7 @@ public class JdbcTransactionRepository implements TransactionRepository {
                 .param("status", TransactionStatus.REJECTED.name())
                 .param("failureCode", failureCode)
                 .param("failureMessage", failureMessage)
-                .param("updatedAt", now));
+                .param("updatedAt", now.atOffset(ZoneOffset.UTC)));
     }
 
     @Override
@@ -185,7 +186,7 @@ public class JdbcTransactionRepository implements TransactionRepository {
                 .param("id", id)
                 .param("status", TransactionStatus.FAILED.name())
                 .param("failureMessage", failureMessage)
-                .param("updatedAt", now));
+                .param("updatedAt", now.atOffset(ZoneOffset.UTC)));
     }
 
     private Transaction applyStateTransition(UUID id, JdbcClient.StatementSpec update) {
