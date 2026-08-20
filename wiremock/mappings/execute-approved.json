@@ -1,0 +1,20 @@
+{
+  "priority": 10,
+  "request": {
+    "method": "POST",
+    "url": "/provider/v1/execute"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "transactionId": "txn-{{randomValue type='NUMERIC' length=6}}",
+      "status": "APPROVED",
+      "balance": 5500.00,
+      "executedAt": "{{now format='yyyy-MM-dd'}}T{{now format='HH:mm:ss'}}Z"
+    },
+    "transformers": ["response-template"]
+  }
+}

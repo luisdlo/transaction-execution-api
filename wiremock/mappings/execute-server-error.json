@@ -1,0 +1,23 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "url": "/provider/v1/execute",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": "$[?(@.accountId == 'acc-error')]"
+      }
+    ]
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "status": "REJECTED",
+      "code": "PROVIDER_UNAVAILABLE",
+      "message": "The provider is temporarily unavailable"
+    }
+  }
+}

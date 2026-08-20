@@ -1,0 +1,33 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: spin-postgres
+    environment:
+      POSTGRES_DB: transactions
+      POSTGRES_USER: transactions
+      POSTGRES_PASSWORD: transactions
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # La app no debe arrancar antes de que Postgres acepte conexiones,
+      # o Flyway falla al intentar migrar.
+      test: ["CMD-SHELL", "pg_isready -U transactions -d transactions"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  wiremock:
+    image: wiremock/wiremock:3.9.1
+    container_name: spin-wiremock
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./wiremock/mappings:/home/wiremock/mappings:ro
+      - ./wiremock/__files:/home/wiremock/__files:ro
+    command: ["--global-response-templating", "--verbose"]
+
+volumes:
+  postgres-data:

@@ -1,0 +1,23 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "url": "/provider/v1/execute",
+    "bodyPatterns": [
+      {
+        "matchesJsonPath": "$[?(@.accountId == 'acc-fail')]"
+      }
+    ]
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "status": "REJECTED",
+      "code": "INSUFFICIENT_FUNDS",
+      "message": "The account does not have enough balance to complete the transaction"
+    }
+  }
+}
