@@ -37,10 +37,6 @@ management:
         enabled: true
       show-details: always
 
-springdoc:
-  swagger-ui:
-    path: /swagger-ui
-
 # ---------------------------------------------------------------------------
 # Proveedor externo
 # ---------------------------------------------------------------------------
@@ -48,6 +44,13 @@ provider:
   base-url: http://localhost:8081
   connect-timeout: 1s
   read-timeout: 3s
+  retry:
+    # Spring semantic: reintentos DESPUES del intento inicial.
+    # max-retries=2 -> 3 peticiones totales.
+    max-retries: 2
+    delay: 200ms
+    multiplier: 2
+    jitter: 100ms
 
 # ---------------------------------------------------------------------------
 # Reglas de negocio. Externalizadas para poder ajustar limites sin recompilar.
