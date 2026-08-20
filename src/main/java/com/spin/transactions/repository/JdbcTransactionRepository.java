@@ -1,6 +1,7 @@
 package com.spin.transactions.repository;
 
 import com.spin.transactions.exception.ConcurrentTransactionUpdateException;
+import com.spin.transactions.exception.TransactionNotFoundException;
 import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionFilter;
 import com.spin.transactions.model.TransactionStatus;
@@ -160,46 +161,40 @@ public class JdbcTransactionRepository implements TransactionRepository {
 
     @Override
     public Transaction markExecuted(UUID id, String providerTransactionId, BigDecimal balanceAfter, Instant now) {
-        int rows = jdbcClient.sql(UPDATE_EXECUTED_SQL)
+        return applyStateTransition(id, jdbcClient.sql(UPDATE_EXECUTED_SQL)
                 .param("id", id)
                 .param("status", TransactionStatus.EXECUTED.name())
                 .param("providerTransactionId", providerTransactionId)
                 .param("balanceAfter", balanceAfter)
-                .param("updatedAt", now)
-                .update();
-        if (rows != 1) {
-            throw new ConcurrentTransactionUpdateException(id);
-        }
-        return findById(id).orElseThrow(() -> new IllegalStateException(
-                "transaction " + id + " was updated but disappeared before re-read"));
+                .param("updatedAt", now));
     }
 
     @Override
     public Transaction markRejected(UUID id, String failureCode, String failureMessage, Instant now) {
-        int rows = jdbcClient.sql(UPDATE_REJECTED_SQL)
+        return applyStateTransition(id, jdbcClient.sql(UPDATE_REJECTED_SQL)
                 .param("id", id)
                 .param("status", TransactionStatus.REJECTED.name())
                 .param("failureCode", failureCode)
                 .param("failureMessage", failureMessage)
-                .param("updatedAt", now)
-                .update();
-        if (rows != 1) {
-            throw new ConcurrentTransactionUpdateException(id);
-        }
-        return findById(id).orElseThrow(() -> new IllegalStateException(
-                "transaction " + id + " was updated but disappeared before re-read"));
+                .param("updatedAt", now));
     }
 
     @Override
     public Transaction markFailed(UUID id, String failureMessage, Instant now) {
-        int rows = jdbcClient.sql(UPDATE_FAILED_SQL)
+        return applyStateTransition(id, jdbcClient.sql(UPDATE_FAILED_SQL)
                 .param("id", id)
                 .param("status", TransactionStatus.FAILED.name())
                 .param("failureMessage", failureMessage)
-                .param("updatedAt", now)
-                .update();
+                .param("updatedAt", now));
+    }
+
+    private Transaction applyStateTransition(UUID id, JdbcClient.StatementSpec update) {
+        int rows = update.update();
         if (rows != 1) {
-            throw new ConcurrentTransactionUpdateException(id);
+            if (findById(id).isPresent()) {
+                throw new ConcurrentTransactionUpdateException(id);
+            }
+            throw new TransactionNotFoundException(id);
         }
         return findById(id).orElseThrow(() -> new IllegalStateException(
                 "transaction " + id + " was updated but disappeared before re-read"));
