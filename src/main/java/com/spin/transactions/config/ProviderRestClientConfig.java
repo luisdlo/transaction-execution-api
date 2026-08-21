@@ -21,7 +21,7 @@ import java.net.http.HttpClient;
  * unlike {@code SimpleClientHttpRequestFactory} (based on {@code HttpURLConnection}),
  * it throws distinct exception types for the two timeout kinds:
  * {@code HttpConnectTimeoutException} for connect-timeout and {@code HttpTimeoutException}
- * for read-timeout. {@link com.spin.transactions.service.provider.HttpProviderClient}
+ * for read-timeout. {@link com.spin.transactions.provider.impl.HttpProviderClient}
  * relies on that distinction to decide whether an ambiguous outcome is safe to retry.
  *
  * <p>{@link EnableResilientMethods} enables Spring Framework 7 native processing of

@@ -1,4 +1,4 @@
-package com.spin.transactions.service.provider;
+package com.spin.transactions.provider;
 
 /**
  * The outcome of the call is ambiguous: a read timeout, or a 200 with a body we

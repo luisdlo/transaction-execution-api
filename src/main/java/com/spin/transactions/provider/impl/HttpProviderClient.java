@@ -1,10 +1,15 @@
-package com.spin.transactions.service.provider;
+package com.spin.transactions.provider.impl;
 
 import com.spin.transactions.config.ProviderRestClientConfig;
 import com.spin.transactions.model.Transaction;
-import com.spin.transactions.service.provider.dto.ProviderErrorResponse;
-import com.spin.transactions.service.provider.dto.ProviderExecuteRequest;
-import com.spin.transactions.service.provider.dto.ProviderExecuteResponse;
+import com.spin.transactions.provider.ProviderClient;
+import com.spin.transactions.provider.ProviderExecution;
+import com.spin.transactions.provider.ProviderRejectedException;
+import com.spin.transactions.provider.ProviderUnavailableException;
+import com.spin.transactions.provider.ProviderUnknownStateException;
+import com.spin.transactions.provider.dto.ProviderErrorResponse;
+import com.spin.transactions.provider.dto.ProviderExecuteRequest;
+import com.spin.transactions.provider.dto.ProviderExecuteResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.HttpStatus;

@@ -1,4 +1,4 @@
-package com.spin.transactions.service.provider.dto;
+package com.spin.transactions.provider.dto;
 
 import java.math.BigDecimal;
 import java.time.Instant;

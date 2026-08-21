@@ -1,5 +1,7 @@
 package com.spin.transactions.service.rule;
 
+import com.spin.transactions.service.rule.impl.DebitLimitRule;
+
 import com.spin.transactions.exception.BusinessRuleViolationException;
 import com.spin.transactions.model.TransactionCommand;
 import com.spin.transactions.model.TransactionType;

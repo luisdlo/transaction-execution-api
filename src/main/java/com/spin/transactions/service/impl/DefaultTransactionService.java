@@ -1,15 +1,16 @@
-package com.spin.transactions.service;
+package com.spin.transactions.service.impl;
 
 import com.spin.transactions.model.PagedResult;
 import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionCommand;
 import com.spin.transactions.model.TransactionFilter;
 import com.spin.transactions.repository.TransactionRepository;
-import com.spin.transactions.service.provider.ProviderClient;
-import com.spin.transactions.service.provider.ProviderExecution;
-import com.spin.transactions.service.provider.ProviderRejectedException;
-import com.spin.transactions.service.provider.ProviderUnavailableException;
-import com.spin.transactions.service.provider.ProviderUnknownStateException;
+import com.spin.transactions.service.TransactionService;
+import com.spin.transactions.provider.ProviderClient;
+import com.spin.transactions.provider.ProviderExecution;
+import com.spin.transactions.provider.ProviderRejectedException;
+import com.spin.transactions.provider.ProviderUnavailableException;
+import com.spin.transactions.provider.ProviderUnknownStateException;
 import com.spin.transactions.service.rule.TransactionRule;
 import org.springframework.stereotype.Service;
 
