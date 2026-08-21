@@ -1,5 +1,10 @@
 package com.spin.transactions.config;
 
+import com.spin.transactions.provider.ProviderRejectedException;
+import com.spin.transactions.provider.ProviderUnavailableException;
+import com.spin.transactions.provider.ProviderUnknownStateException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -8,6 +13,7 @@ import org.springframework.resilience.annotation.EnableResilientMethods;
 import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
+import java.time.Duration;
 
 /**
  * Dedicated {@link RestClient} for the external provider, with its own timeouts.
@@ -33,6 +39,28 @@ import java.net.http.HttpClient;
 public class ProviderRestClientConfig {
 
     public static final String PROVIDER_REST_CLIENT_BEAN = "providerRestClient";
+    public static final String PROVIDER_CIRCUIT_BREAKER_BEAN = "providerCircuitBreaker";
+
+    /**
+     * Circuit breaker for the provider call. Counts only exceptions the provider's
+     * infrastructure can trigger — {@link ProviderRejectedException} is a valid
+     * business response and must NOT open the breaker (otherwise a wave of
+     * insufficient-funds rejections would look like a provider outage).
+     */
+    @Bean(PROVIDER_CIRCUIT_BREAKER_BEAN)
+    public CircuitBreaker providerCircuitBreaker() {
+        CircuitBreakerConfig config = CircuitBreakerConfig.custom()
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+                .slidingWindowSize(20)
+                .minimumNumberOfCalls(10)
+                .failureRateThreshold(50f)
+                .waitDurationInOpenState(Duration.ofSeconds(10))
+                .permittedNumberOfCallsInHalfOpenState(3)
+                .recordExceptions(ProviderUnavailableException.class, ProviderUnknownStateException.class)
+                .ignoreExceptions(ProviderRejectedException.class)
+                .build();
+        return CircuitBreaker.of("providerClient", config);
+    }
 
     @Bean(PROVIDER_REST_CLIENT_BEAN)
     public RestClient providerRestClient(ProviderProperties properties) {

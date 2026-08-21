@@ -18,6 +18,8 @@ public record TransactionResponse(
         TransactionStatus status,
         String providerTransactionId,
         BigDecimal balanceAfter,
+        String failureCode,
+        String failureMessage,
         Instant createdAt
 ) {
 
@@ -32,6 +34,8 @@ public record TransactionResponse(
                 transaction.status(),
                 transaction.providerTransactionId(),
                 transaction.balanceAfter(),
+                transaction.failureCode(),
+                transaction.failureMessage(),
                 transaction.createdAt()
         );
     }

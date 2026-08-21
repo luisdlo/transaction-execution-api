@@ -296,4 +296,22 @@ class DefaultTransactionServiceTest {
 
         verifyNoInteractions(repository);
     }
+
+    @Test
+    @DisplayName("idempotent hit: save() returns a non-PENDING row, service returns it and does NOT call the provider")
+    void execute_shortCircuits_whenSaveReturnsNonPendingTransaction() {
+        // JdbcTransactionRepository.save() resolves an idempotent race by returning
+        // the pre-existing row (already EXECUTED/REJECTED/FAILED). The service must
+        // recognise that and return without calling the provider — otherwise the
+        // client would be charged twice for the same idempotency key.
+        TransactionCommand cmd = command("client-key-123");
+        Transaction existing = pendingFromRepo(cmd, SAVED_ID)
+                .markExecuted("provider-txn-original", new BigDecimal("42.00"), NOW);
+        when(repository.save(any(Transaction.class))).thenReturn(existing);
+
+        Transaction result = service.execute(cmd);
+
+        assertThat(result).isSameAs(existing);
+        verifyNoInteractions(providerClient);
+    }
 }

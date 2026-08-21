@@ -4,6 +4,7 @@ import com.spin.transactions.model.PagedResult;
 import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionCommand;
 import com.spin.transactions.model.TransactionFilter;
+import com.spin.transactions.model.TransactionStatus;
 import com.spin.transactions.repository.TransactionRepository;
 import com.spin.transactions.service.TransactionService;
 import com.spin.transactions.provider.ProviderClient;
@@ -48,6 +49,13 @@ public class DefaultTransactionService implements TransactionService {
             rule.validate(command);
         }
         Transaction saved = repository.save(Transaction.pending(command, Instant.now(clock)));
+        if (saved.status() != TransactionStatus.PENDING) {
+            // Idempotent hit: the repository returned a pre-existing row that is
+            // already resolved. Calling the provider again would double-charge, and
+            // the conditional update would fail anyway because the row is no longer
+            // in PENDING.
+            return saved;
+        }
         return callProviderAndPersistOutcome(saved);
     }
 

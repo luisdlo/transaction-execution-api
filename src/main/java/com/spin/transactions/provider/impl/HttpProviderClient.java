@@ -10,6 +10,8 @@ import com.spin.transactions.provider.ProviderUnknownStateException;
 import com.spin.transactions.provider.dto.ProviderErrorResponse;
 import com.spin.transactions.provider.dto.ProviderExecuteRequest;
 import com.spin.transactions.provider.dto.ProviderExecuteResponse;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.HttpStatus;
@@ -43,10 +45,14 @@ public class HttpProviderClient implements ProviderClient {
     private static final String FALLBACK_ERROR_CODE = "PROVIDER_ERROR";
 
     private final RestClient restClient;
+    private final CircuitBreaker circuitBreaker;
 
     public HttpProviderClient(@Qualifier(ProviderRestClientConfig.PROVIDER_REST_CLIENT_BEAN)
-                              RestClient restClient) {
+                              RestClient restClient,
+                              @Qualifier(ProviderRestClientConfig.PROVIDER_CIRCUIT_BREAKER_BEAN)
+                              CircuitBreaker circuitBreaker) {
         this.restClient = restClient;
+        this.circuitBreaker = circuitBreaker;
     }
 
     /**
@@ -69,6 +75,22 @@ public class HttpProviderClient implements ProviderClient {
             jitterString = "${provider.retry.jitter}"
     )
     public ProviderExecution execute(Transaction transaction) {
+        // Programmatic circuit breaker instead of @CircuitBreaker so the ordering
+        // "@Retryable outside, CircuitBreaker inside" is spelled out in the code
+        // and does not depend on the order Spring stacks AOP proxies. Each retry
+        // attempt hits the breaker; once it opens, subsequent attempts get
+        // CallNotPermittedException immediately without touching the network.
+        try {
+            return circuitBreaker.executeSupplier(() -> doExecute(transaction));
+        } catch (CallNotPermittedException e) {
+            // Translate the Resilience4j type into a domain exception so no code
+            // outside this adapter has to know a circuit breaker exists.
+            throw new ProviderUnavailableException(
+                    "PROVIDER_CIRCUIT_OPEN", "Provider circuit breaker is open", e);
+        }
+    }
+
+    private ProviderExecution doExecute(Transaction transaction) {
         try {
             return restClient.post()
                     .uri(EXECUTE_PATH)

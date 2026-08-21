@@ -7,6 +7,7 @@ import com.spin.transactions.config.ProviderRestClientConfig;
 import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionCommand;
 import com.spin.transactions.model.TransactionType;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,9 +65,15 @@ class HttpProviderClientTest {
     @Autowired
     private ProviderClient providerClient;
 
+    @Autowired
+    private CircuitBreaker circuitBreaker;
+
     @BeforeEach
     void resetStubs() {
         wireMock.resetAll();
+        // Otherwise 5xx/timeout tests would leave failure counters that trip the
+        // breaker in a later test and short-circuit its HTTP call.
+        circuitBreaker.reset();
     }
 
     private static final String EXECUTE_PATH = "/provider/v1/execute";
@@ -210,5 +217,38 @@ class HttpProviderClientTest {
         assertThatThrownBy(() -> providerClient.execute(pendingTransaction()))
                 .isInstanceOfSatisfying(ProviderUnavailableException.class,
                         ex -> assertThat(ex.code()).isEqualTo("PROVIDER_ERROR"));
+    }
+
+    @Test
+    @DisplayName("circuit breaker opens after the failure threshold and stops hitting the provider")
+    void circuitBreaker_stopsHittingProvider_afterFailureThreshold() {
+        // Config: 20-slot COUNT window, minimumNumberOfCalls=10, 50% failure rate.
+        // Each execute() runs @Retryable = 3 attempts. 4 execute() calls with 503
+        // saturate the window with failures somewhere in the middle of the 4th call,
+        // after which the CB opens and subsequent attempts must NOT reach WireMock.
+        wireMock.stubFor(post(urlEqualTo(EXECUTE_PATH))
+                .willReturn(aResponse()
+                        .withStatus(503)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"status":"REJECTED","code":"UNAVAILABLE","message":"Try later"}
+                                """)));
+
+        for (int i = 0; i < 4; i++) {
+            assertThatThrownBy(() -> providerClient.execute(pendingTransaction()))
+                    .isInstanceOf(ProviderUnavailableException.class);
+        }
+
+        int hitsBefore = wireMock.findAll(postRequestedFor(urlEqualTo(EXECUTE_PATH))).size();
+
+        assertThatThrownBy(() -> providerClient.execute(pendingTransaction()))
+                .isInstanceOfSatisfying(ProviderUnavailableException.class,
+                        ex -> assertThat(ex.code()).isEqualTo("PROVIDER_CIRCUIT_OPEN"));
+
+        int hitsAfter = wireMock.findAll(postRequestedFor(urlEqualTo(EXECUTE_PATH))).size();
+        assertThat(hitsAfter)
+                .as("circuit breaker must have short-circuited without touching the provider")
+                .isEqualTo(hitsBefore);
+        assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
     }
 }
