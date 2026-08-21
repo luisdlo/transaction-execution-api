@@ -114,7 +114,10 @@ class TransactionControllerTest {
                         .content(validRequestBody()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("REJECTED"))
-                .andExpect(jsonPath("$.providerTransactionId").doesNotExist());
+                .andExpect(jsonPath("$.providerTransactionId").doesNotExist())
+                // The caller sees 201, so it needs the reason in the body to know why.
+                .andExpect(jsonPath("$.failureCode").value("INSUFFICIENT_FUNDS"))
+                .andExpect(jsonPath("$.failureMessage").value("Not enough balance"));
     }
 
     @Test
@@ -127,7 +130,8 @@ class TransactionControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestBody()))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("FAILED"));
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.failureMessage").value("Read timeout waiting for provider response"));
     }
 
     @Test

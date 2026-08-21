@@ -18,6 +18,10 @@ docker compose up -d
 
 # Suite completa: unitarios + integración con Testcontainers + WireMock in-process
 ./mvnw clean install
+
+# Smoke test end-to-end contra la app y WireMock ya levantados:
+# los cuatro escenarios del proveedor + idempotencia + normalización de currency.
+./scripts/smoke-test.sh
 ```
 
 Puertos por defecto:
@@ -51,19 +55,27 @@ El stub del proveedor selecciona su comportamiento con base en `accountId`:
 
 ```bash
 # 1) Aprobado — cualquier accountId no listado abajo
-curl -XPOST .../transactions -d '{"accountId":"acc-xyz",   "type":"CREDIT","amount":100,"currency":"MXN"}'
+curl -X POST http://localhost:8080/transactions \
+  -H 'Content-Type: application/json' \
+  -d '{"accountId":"acc-xyz","type":"CREDIT","amount":100,"currency":"MXN"}'
 # 201 Created, status: EXECUTED
 
 # 2) Rechazo de negocio — 400 INSUFFICIENT_FUNDS del proveedor
-curl -XPOST .../transactions -d '{"accountId":"acc-fail",  "type":"DEBIT", "amount":100,"currency":"MXN"}'
+curl -X POST http://localhost:8080/transactions \
+  -H 'Content-Type: application/json' \
+  -d '{"accountId":"acc-fail","type":"DEBIT","amount":100,"currency":"MXN"}'
 # 201 Created, status: REJECTED, failureCode: INSUFFICIENT_FUNDS
 
 # 3) Proveedor caído — 503 con retry (2 reintentos, 3 requests totales)
-curl -XPOST .../transactions -d '{"accountId":"acc-error", "type":"CREDIT","amount":100,"currency":"MXN"}'
+curl -X POST http://localhost:8080/transactions \
+  -H 'Content-Type: application/json' \
+  -d '{"accountId":"acc-error","type":"CREDIT","amount":100,"currency":"MXN"}'
 # 201 Created, status: FAILED — provider unavailable
 
 # 4) Read timeout — la petición sale, el cargo pudo ejecutarse, requiere reconciliación
-curl -XPOST .../transactions -d '{"accountId":"acc-slow",  "type":"CREDIT","amount":100,"currency":"MXN"}'
+curl -X POST http://localhost:8080/transactions \
+  -H 'Content-Type: application/json' \
+  -d '{"accountId":"acc-slow","type":"CREDIT","amount":100,"currency":"MXN"}'
 # 201 Created, status: FAILED — unknown state
 ```
 
@@ -114,6 +126,33 @@ abierta durante la llamada HTTP externa. A millones de transacciones diarias
 eso agota el connection pool en minutos. Cada operación de persistencia corre
 como su propia transacción corta auto-commit — es lo que hace posible el
 write-ahead.
+
+### Circuit breaker programático (no `@CircuitBreaker`)
+Resilience4j core, decorado explícitamente dentro de `execute()`:
+
+```
+try {
+    return circuitBreaker.executeSupplier(() -> doExecute(transaction));
+} catch (CallNotPermittedException e) {
+    throw new ProviderUnavailableException("PROVIDER_CIRCUIT_OPEN", ...);
+}
+```
+
+Se hace programático **y no** con `@CircuitBreaker` para que el orden
+`@Retryable` (afuera) → circuit breaker (adentro) sea explícito en el código
+y no dependa del orden con que Spring apile los proxies AOP. Cada reintento
+consulta el breaker; una vez abierto, las siguientes llamadas devuelven
+`CallNotPermittedException` sin tocar la red — se traduce a
+`ProviderUnavailableException` con code `PROVIDER_CIRCUIT_OPEN` para que
+ningún consumidor fuera del adaptador tenga que saber que existe un breaker.
+
+Configuración: ventana COUNT_BASED de 20, mínimo 10 llamadas para evaluar,
+umbral de falla 50%, 10s en estado OPEN, 3 llamadas permitidas en HALF_OPEN.
+
+`recordExceptions`: `ProviderUnavailableException`, `ProviderUnknownStateException`.
+`ignoreExceptions`: `ProviderRejectedException` — un rechazo de negocio es
+respuesta válida del proveedor, no una falla del transporte; contarlo abriría
+el breaker durante una avalancha de saldos insuficientes.
 
 ### Retry solo en 5xx / 429
 - **4xx** — determinista. Reintentar no puede producir una respuesta distinta y
@@ -180,17 +219,6 @@ Todas las respuestas de error son `ProblemDetail` (RFC 7807).
 
 ## Qué NO se hizo y por qué
 
-### Circuit breaker
-El `@Retryable` con backoff cubre el caso agudo (proveedor con hipo temporal).
-Un CB añade la protección contra un proveedor caído sostenidamente. Se dejó
-como siguiente paso.
-
-**Configuración sugerida cuando se agregue:** contar como fallas solo
-`ProviderUnavailableException` y `ProviderUnknownStateException`. **NO** contar
-`ProviderRejectedException` — un rechazo de negocio es respuesta válida del
-proveedor, no una falla del transporte; abriría el CB por saldos insuficientes
-de los clientes.
-
 ### Kafka / eventos asíncronos
 El `POST /transactions` es **síncrono por contrato**: el cliente necesita el
 `status` final y el `balanceAfter` en la respuesta. Kafka no reemplaza el
@@ -205,7 +233,7 @@ La estructura está lista — el job no.
 
 ### CI pipeline
 Sin `.github/workflows/`. `./mvnw clean install` cubre la validación local
-(76 tests, todos verdes). Un workflow de GitHub Actions es trivial de agregar;
+(78 tests, todos verdes). Un workflow de GitHub Actions es trivial de agregar;
 se dejó fuera por foco de tiempo.
 
 ## Relación con el stack de Spin
@@ -259,5 +287,24 @@ generador, y quedaron en el código:
    firma de `TransactionRepository.findByFilters` para aceptar `long offset`
    (Postgres `OFFSET` acepta `bigint`).
 
-Estas cuatro son criterio de ingeniería, no output de un modelo. Es lo que
+5. **Circuit breaker programático en vez de `@CircuitBreaker`.** El generador
+   sugirió el anotativo. Se cambió a decoración explícita
+   (`circuitBreaker.executeSupplier(...)`) dentro de `execute()` para que el
+   orden `@Retryable` (afuera) → circuit breaker (adentro) sea visible en el
+   código, y no dependa del orden con que Spring apila los proxies AOP.
+   `CallNotPermittedException` se traduce a `ProviderUnavailableException`
+   para que Resilience4j no se escape del adaptador.
+
+6. **Idempotencia rota en el caso secuencial.** En una versión intermedia el
+   service llamaba al proveedor una segunda vez cuando `save()` devolvía una
+   fila preexistente ya resuelta (hit idempotente del repositorio). Esto
+   **duplicaba el cargo** y además hacía fallar el update condicional posterior
+   con `ConcurrentTransactionUpdateException` → 409 al cliente. **Los tests
+   unitarios del service no lo detectaron** porque los mocks no reproducían
+   el comportamiento real de `JdbcTransactionRepository.save()`. Apareció con
+   el smoke test manual (`scripts/smoke-test.sh`). Se cerró con el guard
+   `if (saved.status() != PENDING) return saved;` inmediatamente después del
+   save.
+
+Estas seis son criterio de ingeniería, no output de un modelo. Es lo que
 separa "generar código" de "diseñar un sistema".
