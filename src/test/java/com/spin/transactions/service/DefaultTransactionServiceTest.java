@@ -1,5 +1,7 @@
 package com.spin.transactions.service;
 
+import com.spin.transactions.service.impl.DefaultTransactionService;
+
 import com.spin.transactions.exception.BusinessRuleViolationException;
 import com.spin.transactions.model.PagedResult;
 import com.spin.transactions.model.Transaction;
@@ -8,11 +10,11 @@ import com.spin.transactions.model.TransactionFilter;
 import com.spin.transactions.model.TransactionStatus;
 import com.spin.transactions.model.TransactionType;
 import com.spin.transactions.repository.TransactionRepository;
-import com.spin.transactions.service.provider.ProviderClient;
-import com.spin.transactions.service.provider.ProviderExecution;
-import com.spin.transactions.service.provider.ProviderRejectedException;
-import com.spin.transactions.service.provider.ProviderUnavailableException;
-import com.spin.transactions.service.provider.ProviderUnknownStateException;
+import com.spin.transactions.provider.ProviderClient;
+import com.spin.transactions.provider.ProviderExecution;
+import com.spin.transactions.provider.ProviderRejectedException;
+import com.spin.transactions.provider.ProviderUnavailableException;
+import com.spin.transactions.provider.ProviderUnknownStateException;
 import com.spin.transactions.service.rule.TransactionRule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

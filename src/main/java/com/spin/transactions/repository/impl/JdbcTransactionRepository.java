@@ -1,10 +1,11 @@
-package com.spin.transactions.repository;
+package com.spin.transactions.repository.impl;
 
 import com.spin.transactions.exception.ConcurrentTransactionUpdateException;
 import com.spin.transactions.exception.TransactionNotFoundException;
 import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionFilter;
 import com.spin.transactions.model.TransactionStatus;
+import com.spin.transactions.repository.TransactionRepository;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;

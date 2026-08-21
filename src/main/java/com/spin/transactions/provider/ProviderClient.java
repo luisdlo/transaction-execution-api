@@ -1,4 +1,4 @@
-package com.spin.transactions.service.provider;
+package com.spin.transactions.provider;
 
 import com.spin.transactions.model.Transaction;
 

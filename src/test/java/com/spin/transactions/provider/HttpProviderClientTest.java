@@ -1,4 +1,6 @@
-package com.spin.transactions.service.provider;
+package com.spin.transactions.provider;
+
+import com.spin.transactions.provider.impl.HttpProviderClient;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.spin.transactions.config.ProviderRestClientConfig;

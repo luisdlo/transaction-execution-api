@@ -1,7 +1,9 @@
-package com.spin.transactions.service.rule;
+package com.spin.transactions.service.rule.impl;
 
 import com.spin.transactions.exception.BusinessRuleViolationException;
 import com.spin.transactions.model.TransactionCommand;
+import com.spin.transactions.service.rule.TransactionRule;
+import com.spin.transactions.service.rule.TransactionRuleProperties;
 import org.springframework.stereotype.Component;
 
 @Component

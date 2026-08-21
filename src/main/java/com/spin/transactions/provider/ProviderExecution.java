@@ -1,4 +1,4 @@
-package com.spin.transactions.service.provider;
+package com.spin.transactions.provider;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -7,7 +7,7 @@ import java.util.Objects;
 /**
  * Result of a successful call to the external provider.
  *
- * Lives in {@code service/provider} rather than {@code model} because it is the output
+ * Lives in {@code provider} rather than {@code model} because it is the output
  * of the adapter, not a persisted domain concept. The service maps this into the
  * persisted {@code Transaction} by calling {@code markExecuted(...)}.
  */

@@ -1,4 +1,4 @@
-package com.spin.transactions.repository;
+package com.spin.transactions.repository.impl;
 
 import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionStatus;

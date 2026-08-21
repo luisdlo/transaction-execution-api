@@ -1,4 +1,4 @@
-package com.spin.transactions.service.provider;
+package com.spin.transactions.provider;
 
 /**
  * The provider explicitly rejected the transaction (known outcome). The charge did

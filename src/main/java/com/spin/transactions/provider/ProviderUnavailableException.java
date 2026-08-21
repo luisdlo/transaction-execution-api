@@ -1,4 +1,4 @@
-package com.spin.transactions.service.provider;
+package com.spin.transactions.provider;
 
 /**
  * The provider cannot handle the request right now: 5xx, 429, connect timeout,

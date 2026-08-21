@@ -1,4 +1,4 @@
-package com.spin.transactions.service.provider.dto;
+package com.spin.transactions.provider.dto;
 
 /**
  * Error-path body from the provider on 4xx/5xx responses.

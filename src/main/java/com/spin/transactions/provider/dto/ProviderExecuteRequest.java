@@ -1,4 +1,4 @@
-package com.spin.transactions.service.provider.dto;
+package com.spin.transactions.provider.dto;
 
 import com.spin.transactions.model.Transaction;
 

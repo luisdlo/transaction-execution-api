@@ -37,6 +37,10 @@ management:
         enabled: true
       show-details: always
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui
+
 # ---------------------------------------------------------------------------
 # Proveedor externo
 # ---------------------------------------------------------------------------

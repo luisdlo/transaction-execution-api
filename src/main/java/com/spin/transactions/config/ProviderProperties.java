@@ -8,7 +8,7 @@ import java.time.Duration;
  * Provider-facing configuration.
  *
  * The {@code retry.*} keys are consumed directly by {@code @Retryable} placeholders
- * on {@code HttpProviderClient} — they intentionally do not appear here as fields,
+ * on {@code com.spin.transactions.provider.impl.HttpProviderClient} — they intentionally do not appear here as fields,
  * so there is no chance of them being read twice from different code paths.
  */
 @ConfigurationProperties(prefix = "provider")
