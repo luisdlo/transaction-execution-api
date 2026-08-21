@@ -1,4 +1,4 @@
-package com.spin.transactions.repository.impl;
+package com.spin.transactions.repository.mapper;
 
 import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionStatus;
@@ -10,9 +10,9 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-final class TransactionRowMapper implements RowMapper<Transaction> {
+public final class TransactionRowMapper implements RowMapper<Transaction> {
 
-    static final TransactionRowMapper INSTANCE = new TransactionRowMapper();
+    public static final TransactionRowMapper INSTANCE = new TransactionRowMapper();
 
     private TransactionRowMapper() {
     }

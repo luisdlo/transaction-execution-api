@@ -1,8 +1,8 @@
 package com.spin.transactions.controller;
 
-import com.spin.transactions.controller.dto.CreateTransactionRequest;
-import com.spin.transactions.controller.dto.PagedResponse;
-import com.spin.transactions.controller.dto.TransactionResponse;
+import com.spin.transactions.controller.request.CreateTransactionRequest;
+import com.spin.transactions.controller.response.PagedResponse;
+import com.spin.transactions.controller.response.TransactionResponse;
 import com.spin.transactions.model.PagedResult;
 import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionFilter;
@@ -59,7 +59,7 @@ public class TransactionController {
     @PostMapping
     public ResponseEntity<TransactionResponse> create(
             @Valid @RequestBody CreateTransactionRequest request,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+            @RequestHeader(value = ApiHeaders.IDEMPOTENCY_KEY, required = false) String idempotencyKey) {
         Transaction result = service.execute(request.toCommand(idempotencyKey));
         URI location = ServletUriComponentsBuilder.fromCurrentRequestUri()
                 .path("/{id}")

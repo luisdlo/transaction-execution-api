@@ -1,4 +1,4 @@
-package com.spin.transactions.controller.dto;
+package com.spin.transactions.controller.request;
 
 import com.spin.transactions.model.TransactionCommand;
 import com.spin.transactions.model.TransactionType;

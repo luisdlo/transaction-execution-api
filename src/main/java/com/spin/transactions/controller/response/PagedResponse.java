@@ -1,4 +1,4 @@
-package com.spin.transactions.controller.dto;
+package com.spin.transactions.controller.response;
 
 import java.util.List;
 
