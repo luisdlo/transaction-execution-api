@@ -261,7 +261,7 @@ durante toda la implementación. Alcance:
 ciegas. Las siguientes decisiones concretas salieron de la revisión, no del
 generador, y quedaron en el código:
 
-1. **Distinción connect timeout vs read timeout en `HttpProviderClient`.**
+1. **Distinción connect timeout vs read timeout en `ProviderServiceImpl`.**
    La primera versión mapeaba ambos igual. Del `IOException` genérico no
    puedes decidir si duplicaste un cargo. Se separaron: la primera es
    `ProviderUnavailableException` (retry OK), la segunda es

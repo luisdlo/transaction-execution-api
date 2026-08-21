@@ -1,4 +1,4 @@
-package com.spin.transactions.response;
+package com.spin.transactions.dto.response;
 
 import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionStatus;

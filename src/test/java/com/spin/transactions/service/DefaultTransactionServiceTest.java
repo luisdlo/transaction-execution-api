@@ -10,11 +10,11 @@ import com.spin.transactions.model.TransactionFilter;
 import com.spin.transactions.model.TransactionStatus;
 import com.spin.transactions.model.TransactionType;
 import com.spin.transactions.repository.TransactionRepository;
-import com.spin.transactions.provider.ProviderClient;
-import com.spin.transactions.provider.ProviderExecution;
-import com.spin.transactions.provider.ProviderRejectedException;
-import com.spin.transactions.provider.ProviderUnavailableException;
-import com.spin.transactions.provider.ProviderUnknownStateException;
+import com.spin.transactions.service.ProviderService;
+import com.spin.transactions.model.ProviderExecution;
+import com.spin.transactions.exception.ProviderRejectedException;
+import com.spin.transactions.exception.ProviderUnavailableException;
+import com.spin.transactions.exception.ProviderUnknownStateException;
 import com.spin.transactions.service.rule.TransactionRule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,7 +54,7 @@ class DefaultTransactionServiceTest {
     @Mock private TransactionRule ruleB;
     @Mock private TransactionRule ruleC;
     @Mock private TransactionRepository repository;
-    @Mock private ProviderClient providerClient;
+    @Mock private ProviderService providerService;
 
     private DefaultTransactionService service;
 
@@ -63,7 +63,7 @@ class DefaultTransactionServiceTest {
         service = new DefaultTransactionService(
                 List.of(ruleA, ruleB, ruleC),
                 repository,
-                providerClient,
+                providerService,
                 CLOCK);
     }
 
@@ -107,7 +107,7 @@ class DefaultTransactionServiceTest {
         Transaction executed = saved.markExecuted("provider-txn-1", balance, NOW);
 
         when(repository.save(any(Transaction.class))).thenReturn(saved);
-        when(providerClient.execute(saved))
+        when(providerService.execute(saved))
                 .thenReturn(new ProviderExecution("provider-txn-1", balance, NOW));
         when(repository.markExecuted(SAVED_ID, "provider-txn-1", balance, NOW))
                 .thenReturn(executed);
@@ -120,7 +120,7 @@ class DefaultTransactionServiceTest {
     }
 
     @Test
-    @DisplayName("rule violation short-circuits: repository and providerClient are never touched")
+    @DisplayName("rule violation short-circuits: repository and providerService are never touched")
     void execute_stopsAtRule_andPersistsNothing() {
         TransactionCommand cmd = command(null);
         doThrow(new BusinessRuleViolationException("MIN_AMOUNT", "below minimum"))
@@ -131,7 +131,7 @@ class DefaultTransactionServiceTest {
                         ex -> assertThat(ex.code()).isEqualTo("MIN_AMOUNT"));
 
         verifyNoInteractions(repository);
-        verifyNoInteractions(providerClient);
+        verifyNoInteractions(providerService);
     }
 
     @Test
@@ -141,7 +141,7 @@ class DefaultTransactionServiceTest {
         Transaction saved = pendingFromRepo(cmd, SAVED_ID);
         BigDecimal balance = new BigDecimal("100.00");
         when(repository.save(any(Transaction.class))).thenReturn(saved);
-        when(providerClient.execute(saved))
+        when(providerService.execute(saved))
                 .thenReturn(new ProviderExecution("provider-txn-2", balance, NOW));
         when(repository.markExecuted(eq(SAVED_ID), anyString(), any(), eq(NOW)))
                 .thenReturn(saved.markExecuted("provider-txn-2", balance, NOW));
@@ -150,9 +150,9 @@ class DefaultTransactionServiceTest {
 
         // If this order flips, a crash between provider and save would leave a real
         // charge with no local record — precisely what write-ahead exists to prevent.
-        InOrder inOrder = inOrder(repository, providerClient);
+        InOrder inOrder = inOrder(repository, providerService);
         inOrder.verify(repository).save(any(Transaction.class));
-        inOrder.verify(providerClient).execute(saved);
+        inOrder.verify(providerService).execute(saved);
         inOrder.verify(repository).markExecuted(eq(SAVED_ID), eq("provider-txn-2"), any(), eq(NOW));
     }
 
@@ -164,7 +164,7 @@ class DefaultTransactionServiceTest {
         Transaction rejected = saved.markRejected("INSUFFICIENT_FUNDS", "Not enough balance", NOW);
 
         when(repository.save(any(Transaction.class))).thenReturn(saved);
-        when(providerClient.execute(saved))
+        when(providerService.execute(saved))
                 .thenThrow(new ProviderRejectedException("INSUFFICIENT_FUNDS", "Not enough balance"));
         when(repository.markRejected(SAVED_ID, "INSUFFICIENT_FUNDS", "Not enough balance", NOW))
                 .thenReturn(rejected);
@@ -187,7 +187,7 @@ class DefaultTransactionServiceTest {
         Transaction failed = saved.markFailed("Could not connect to provider", NOW);
 
         when(repository.save(any(Transaction.class))).thenReturn(saved);
-        when(providerClient.execute(saved))
+        when(providerService.execute(saved))
                 .thenThrow(new ProviderUnavailableException(
                         "PROVIDER_UNREACHABLE", "Could not connect to provider"));
         when(repository.markFailed(SAVED_ID, "Could not connect to provider", NOW))
@@ -207,7 +207,7 @@ class DefaultTransactionServiceTest {
         Transaction failed = saved.markFailed("Read timeout waiting for provider response", NOW);
 
         when(repository.save(any(Transaction.class))).thenReturn(saved);
-        when(providerClient.execute(saved))
+        when(providerService.execute(saved))
                 .thenThrow(new ProviderUnknownStateException(
                         "Read timeout waiting for provider response"));
         when(repository.markFailed(SAVED_ID, "Read timeout waiting for provider response", NOW))
@@ -225,7 +225,7 @@ class DefaultTransactionServiceTest {
         TransactionCommand cmd = command(null);
         Transaction saved = pendingFromRepo(cmd, SAVED_ID);
         when(repository.save(any(Transaction.class))).thenReturn(saved);
-        when(providerClient.execute(saved))
+        when(providerService.execute(saved))
                 .thenReturn(new ProviderExecution("p", new BigDecimal("1.00"), NOW));
         when(repository.markExecuted(eq(SAVED_ID), anyString(), any(), eq(NOW))).thenReturn(saved);
 
@@ -312,6 +312,6 @@ class DefaultTransactionServiceTest {
         Transaction result = service.execute(cmd);
 
         assertThat(result).isSameAs(existing);
-        verifyNoInteractions(providerClient);
+        verifyNoInteractions(providerService);
     }
 }

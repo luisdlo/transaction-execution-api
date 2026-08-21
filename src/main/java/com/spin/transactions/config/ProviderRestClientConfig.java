@@ -1,8 +1,8 @@
 package com.spin.transactions.config;
 
-import com.spin.transactions.provider.ProviderRejectedException;
-import com.spin.transactions.provider.ProviderUnavailableException;
-import com.spin.transactions.provider.ProviderUnknownStateException;
+import com.spin.transactions.exception.ProviderRejectedException;
+import com.spin.transactions.exception.ProviderUnavailableException;
+import com.spin.transactions.exception.ProviderUnknownStateException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -27,11 +27,11 @@ import java.time.Duration;
  * unlike {@code SimpleClientHttpRequestFactory} (based on {@code HttpURLConnection}),
  * it throws distinct exception types for the two timeout kinds:
  * {@code HttpConnectTimeoutException} for connect-timeout and {@code HttpTimeoutException}
- * for read-timeout. {@link com.spin.transactions.provider.impl.HttpProviderClient}
+ * for read-timeout. {@link com.spin.transactions.service.impl.ProviderServiceImpl}
  * relies on that distinction to decide whether an ambiguous outcome is safe to retry.
  *
  * <p>{@link EnableResilientMethods} enables Spring Framework 7 native processing of
- * {@code @Retryable}, which lives on {@code HttpProviderClient#execute(...)}.
+ * {@code @Retryable}, which lives on {@code ProviderServiceImpl#execute(...)}.
  */
 @Configuration
 @EnableConfigurationProperties(ProviderProperties.class)
@@ -59,7 +59,7 @@ public class ProviderRestClientConfig {
                 .recordExceptions(ProviderUnavailableException.class, ProviderUnknownStateException.class)
                 .ignoreExceptions(ProviderRejectedException.class)
                 .build();
-        return CircuitBreaker.of("providerClient", config);
+        return CircuitBreaker.of("providerService", config);
     }
 
     @Bean(PROVIDER_REST_CLIENT_BEAN)

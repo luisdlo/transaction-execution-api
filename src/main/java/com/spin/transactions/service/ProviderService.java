@@ -1,5 +1,9 @@
-package com.spin.transactions.provider;
+package com.spin.transactions.service;
 
+import com.spin.transactions.exception.ProviderRejectedException;
+import com.spin.transactions.exception.ProviderUnavailableException;
+import com.spin.transactions.exception.ProviderUnknownStateException;
+import com.spin.transactions.model.ProviderExecution;
 import com.spin.transactions.model.Transaction;
 
 /**
@@ -22,7 +26,7 @@ import com.spin.transactions.model.Transaction;
  *       The service must mark FAILED for reconciliation, never retry.</li>
  * </ul>
  */
-public interface ProviderClient {
+public interface ProviderService {
 
     ProviderExecution execute(Transaction transaction);
 }

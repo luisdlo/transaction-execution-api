@@ -1,6 +1,10 @@
-package com.spin.transactions.provider;
+package com.spin.transactions.service;
 
-import com.spin.transactions.provider.impl.HttpProviderClient;
+import com.spin.transactions.service.impl.ProviderServiceImpl;
+import com.spin.transactions.exception.ProviderRejectedException;
+import com.spin.transactions.exception.ProviderUnavailableException;
+import com.spin.transactions.exception.ProviderUnknownStateException;
+import com.spin.transactions.model.ProviderExecution;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.spin.transactions.config.ProviderRestClientConfig;
@@ -37,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * classes passed via {@code classes = ...} do not enable auto-configuration.
  */
 @SpringBootTest(
-        classes = {ProviderRestClientConfig.class, HttpProviderClient.class},
+        classes = {ProviderRestClientConfig.class, ProviderServiceImpl.class},
         properties = {
                 "provider.connect-timeout=500ms",
                 "provider.read-timeout=500ms",
@@ -47,7 +51,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
                 "provider.retry.jitter=0ms"
         }
 )
-class HttpProviderClientTest {
+class ProviderServiceImplTest {
 
     // The extension binds a dynamic port and manages start/stop across the test class.
     // @DynamicPropertySource registers a lazy Supplier, so getPort() is only invoked
@@ -63,7 +67,7 @@ class HttpProviderClientTest {
     }
 
     @Autowired
-    private ProviderClient providerClient;
+    private ProviderService providerService;
 
     @Autowired
     private CircuitBreaker circuitBreaker;
@@ -102,7 +106,7 @@ class HttpProviderClientTest {
                                 }
                                 """)));
 
-        ProviderExecution execution = providerClient.execute(pendingTransaction());
+        ProviderExecution execution = providerService.execute(pendingTransaction());
 
         assertThat(execution.providerTransactionId()).isEqualTo("txn-789");
         assertThat(execution.balanceAfter()).isEqualByComparingTo("5500.00");
@@ -139,7 +143,7 @@ class HttpProviderClientTest {
                                 }
                                 """)));
 
-        assertThatThrownBy(() -> providerClient.execute(pendingTransaction()))
+        assertThatThrownBy(() -> providerService.execute(pendingTransaction()))
                 .isInstanceOfSatisfying(ProviderRejectedException.class, ex -> {
                     assertThat(ex.code()).isEqualTo("INSUFFICIENT_FUNDS");
                     assertThat(ex.getMessage()).isEqualTo("Not enough balance");
@@ -159,7 +163,7 @@ class HttpProviderClientTest {
                                 {"status":"REJECTED","code":"UNAVAILABLE","message":"Try later"}
                                 """)));
 
-        assertThatThrownBy(() -> providerClient.execute(pendingTransaction()))
+        assertThatThrownBy(() -> providerService.execute(pendingTransaction()))
                 .isInstanceOf(ProviderUnavailableException.class);
 
         // max-retries=2 (Spring semantic: retries AFTER the initial attempt) -> 3 requests.
@@ -179,7 +183,7 @@ class HttpProviderClientTest {
                         .withFixedDelay(2000)
                         .withBody("{}")));
 
-        assertThatThrownBy(() -> providerClient.execute(pendingTransaction()))
+        assertThatThrownBy(() -> providerService.execute(pendingTransaction()))
                 .isInstanceOf(ProviderUnknownStateException.class);
 
         wireMock.verify(exactly(1), postRequestedFor(urlEqualTo(EXECUTE_PATH)));
@@ -201,7 +205,7 @@ class HttpProviderClientTest {
                                 }
                                 """)));
 
-        assertThatThrownBy(() -> providerClient.execute(pendingTransaction()))
+        assertThatThrownBy(() -> providerService.execute(pendingTransaction()))
                 .isInstanceOf(ProviderRejectedException.class);
     }
 
@@ -214,7 +218,7 @@ class HttpProviderClientTest {
                         .withHeader("Content-Type", "text/html")
                         .withBody("<html><body>Bad Gateway</body></html>")));
 
-        assertThatThrownBy(() -> providerClient.execute(pendingTransaction()))
+        assertThatThrownBy(() -> providerService.execute(pendingTransaction()))
                 .isInstanceOfSatisfying(ProviderUnavailableException.class,
                         ex -> assertThat(ex.code()).isEqualTo("PROVIDER_ERROR"));
     }
@@ -235,13 +239,13 @@ class HttpProviderClientTest {
                                 """)));
 
         for (int i = 0; i < 4; i++) {
-            assertThatThrownBy(() -> providerClient.execute(pendingTransaction()))
+            assertThatThrownBy(() -> providerService.execute(pendingTransaction()))
                     .isInstanceOf(ProviderUnavailableException.class);
         }
 
         int hitsBefore = wireMock.findAll(postRequestedFor(urlEqualTo(EXECUTE_PATH))).size();
 
-        assertThatThrownBy(() -> providerClient.execute(pendingTransaction()))
+        assertThatThrownBy(() -> providerService.execute(pendingTransaction()))
                 .isInstanceOfSatisfying(ProviderUnavailableException.class,
                         ex -> assertThat(ex.code()).isEqualTo("PROVIDER_CIRCUIT_OPEN"));
 
