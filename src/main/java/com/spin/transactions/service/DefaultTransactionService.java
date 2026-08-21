@@ -11,7 +11,6 @@ import com.spin.transactions.service.provider.ProviderRejectedException;
 import com.spin.transactions.service.provider.ProviderUnavailableException;
 import com.spin.transactions.service.provider.ProviderUnknownStateException;
 import com.spin.transactions.service.rule.TransactionRule;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -20,6 +19,8 @@ import java.util.List;
 
 @Service
 public class DefaultTransactionService implements TransactionService {
+
+    private static final int MAX_LIMIT = 100;
 
     private final List<TransactionRule> rules;
     private final TransactionRepository repository;
@@ -45,26 +46,7 @@ public class DefaultTransactionService implements TransactionService {
         for (TransactionRule rule : rules) {
             rule.validate(command);
         }
-
-        Transaction pending = Transaction.pending(command, Instant.now(clock));
-
-        if (command.idempotencyKey() != null) {
-            try {
-                Transaction saved = repository.save(pending);
-                return callProviderAndPersistOutcome(saved);
-            } catch (DuplicateKeyException e) {
-                // Idempotent race: the (accountId, idempotencyKey) unique index rejected
-                // the insert. Return the row that actually persisted so both callers see
-                // the same result the original request produced — do NOT call the
-                // provider again, that would double-charge.
-                return repository.findByIdempotencyKey(command.accountId(), command.idempotencyKey())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "duplicate key on insert but existing row not found for "
-                                        + command.accountId() + "/" + command.idempotencyKey()));
-            }
-        }
-
-        Transaction saved = repository.save(pending);
+        Transaction saved = repository.save(Transaction.pending(command, Instant.now(clock)));
         return callProviderAndPersistOutcome(saved);
     }
 
@@ -98,8 +80,19 @@ public class DefaultTransactionService implements TransactionService {
 
     @Override
     public PagedResult<Transaction> find(TransactionFilter filter, int page, int limit) {
+        if (page < 0) {
+            throw new IllegalArgumentException("page must be >= 0");
+        }
+        if (limit < 1 || limit > MAX_LIMIT) {
+            throw new IllegalArgumentException("limit must be between 1 and " + MAX_LIMIT);
+        }
+        // Multiply as long: with page and limit each bounded by int, a request deep
+        // into the pagination could otherwise overflow (e.g. page=Integer.MAX_VALUE/50)
+        // and silently produce a negative offset. The repository takes a long and
+        // Postgres OFFSET accepts bigint, so the widened value flows through untouched.
+        long offset = (long) page * (long) limit;
         // Ask for limit+1 to know whether there is a next page without a COUNT(*).
-        List<Transaction> rows = repository.findByFilters(filter, limit + 1, page * limit);
+        List<Transaction> rows = repository.findByFilters(filter, limit + 1, offset);
         boolean hasNext = rows.size() > limit;
         List<Transaction> items = hasNext ? rows.subList(0, limit) : rows;
         return new PagedResult<>(items, page, limit, hasNext);

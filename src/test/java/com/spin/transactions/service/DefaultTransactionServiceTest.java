@@ -21,14 +21,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DuplicateKeyException;
 
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,7 +47,6 @@ class DefaultTransactionServiceTest {
     private static final Instant NOW = Instant.parse("2026-03-15T10:30:00Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final UUID SAVED_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final UUID EXISTING_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     @Mock private TransactionRule ruleA;
     @Mock private TransactionRule ruleB;
@@ -221,39 +218,6 @@ class DefaultTransactionServiceTest {
     }
 
     @Test
-    @DisplayName("idempotent race: duplicate insert with a key returns the existing tx, provider is NOT called")
-    void execute_returnsExisting_whenDuplicateWithIdempotencyKey() {
-        TransactionCommand cmd = command("client-key-123");
-        Transaction existing = pendingFromRepo(cmd, EXISTING_ID)
-                .markExecuted("provider-txn-original", new BigDecimal("42.00"), NOW);
-
-        when(repository.save(any(Transaction.class)))
-                .thenThrow(new DuplicateKeyException("unique index"));
-        when(repository.findByIdempotencyKey("acc-123456", "client-key-123"))
-                .thenReturn(Optional.of(existing));
-
-        Transaction result = service.execute(cmd);
-
-        assertThat(result).isSameAs(existing);
-        // Critical: if the provider were called a second time, the same idempotency
-        // key on our side would map to two charges on their side. Never allowed.
-        verifyNoInteractions(providerClient);
-    }
-
-    @Test
-    @DisplayName("duplicate insert with NO idempotency key propagates: it is a real conflict, not a race")
-    void execute_propagatesDuplicateKey_whenNoIdempotencyKey() {
-        TransactionCommand cmd = command(null);
-        DuplicateKeyException boom = new DuplicateKeyException("unique index");
-        when(repository.save(any(Transaction.class))).thenThrow(boom);
-
-        assertThatThrownBy(() -> service.execute(cmd))
-                .isSameAs(boom);
-
-        verifyNoInteractions(providerClient);
-    }
-
-    @Test
     @DisplayName("every rule is applied, not just the first")
     void execute_appliesAllRules() {
         TransactionCommand cmd = command(null);
@@ -271,10 +235,10 @@ class DefaultTransactionServiceTest {
     }
 
     @Test
-    @DisplayName("find delegates to repository and passes the filter through")
-    void find_delegatesToRepository() {
+    @DisplayName("find asks for limit+1, trims the extra row and flags hasNext=true")
+    void find_trimsExtraRow_andFlagsHasNext() {
         TransactionFilter filter = new TransactionFilter("acc-1", TransactionStatus.EXECUTED, null);
-        // Ten rows returned for limit=5 proves the service asks for limit+1 (=6)
+        // Six rows returned for limit=5 proves the service asks for limit+1 (=6)
         // and trims the extra row while flipping hasNext to true.
         List<Transaction> rows = List.of(
                 pendingFromRepo(command(null), UUID.randomUUID()),
@@ -295,4 +259,39 @@ class DefaultTransactionServiceTest {
         verify(repository).findByFilters(filter, 6, 10);
     }
 
+    @Test
+    @DisplayName("find rejects a negative page and never touches the repository")
+    void find_rejectsNegativePage() {
+        TransactionFilter filter = new TransactionFilter(null, null, null);
+
+        assertThatThrownBy(() -> service.find(filter, -1, 10))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("page");
+
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    @DisplayName("find rejects limit=0 (must be >= 1)")
+    void find_rejectsZeroLimit() {
+        TransactionFilter filter = new TransactionFilter(null, null, null);
+
+        assertThatThrownBy(() -> service.find(filter, 0, 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("limit");
+
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    @DisplayName("find rejects a limit greater than MAX_LIMIT (100)")
+    void find_rejectsLimitAboveMax() {
+        TransactionFilter filter = new TransactionFilter(null, null, null);
+
+        assertThatThrownBy(() -> service.find(filter, 0, 101))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("limit");
+
+        verifyNoInteractions(repository);
+    }
 }

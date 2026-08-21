@@ -136,7 +136,7 @@ public class JdbcTransactionRepository implements TransactionRepository {
     }
 
     @Override
-    public List<Transaction> findByFilters(TransactionFilter filter, int limit, int offset) {
+    public List<Transaction> findByFilters(TransactionFilter filter, int limit, long offset) {
         StringBuilder sql = new StringBuilder(SELECT_ALL_COLUMNS).append(" WHERE 1=1");
         Map<String, Object> params = new HashMap<>();
         if (filter.accountId() != null) {
