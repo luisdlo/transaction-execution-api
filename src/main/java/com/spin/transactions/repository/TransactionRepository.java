@@ -17,7 +17,7 @@ public interface TransactionRepository {
 
     Optional<Transaction> findByIdempotencyKey(String accountId, String idempotencyKey);
 
-    List<Transaction> findByFilters(TransactionFilter filter, int limit, int offset);
+    List<Transaction> findByFilters(TransactionFilter filter, int limit, long offset);
 
     Transaction markExecuted(UUID id, String providerTransactionId, BigDecimal balanceAfter, Instant now);
 
