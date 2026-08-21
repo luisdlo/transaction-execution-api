@@ -6,6 +6,7 @@ import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionFilter;
 import com.spin.transactions.model.TransactionStatus;
 import com.spin.transactions.repository.TransactionRepository;
+import com.spin.transactions.repository.mapper.TransactionRowMapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
