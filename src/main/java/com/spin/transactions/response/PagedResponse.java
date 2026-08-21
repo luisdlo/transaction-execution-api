@@ -1,4 +1,4 @@
-package com.spin.transactions.controller.response;
+package com.spin.transactions.response;
 
 import java.util.List;
 

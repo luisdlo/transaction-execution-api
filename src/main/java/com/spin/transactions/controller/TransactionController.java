@@ -1,8 +1,8 @@
 package com.spin.transactions.controller;
 
-import com.spin.transactions.controller.request.CreateTransactionRequest;
-import com.spin.transactions.controller.response.PagedResponse;
-import com.spin.transactions.controller.response.TransactionResponse;
+import com.spin.transactions.request.CreateTransactionRequest;
+import com.spin.transactions.response.PagedResponse;
+import com.spin.transactions.response.TransactionResponse;
 import com.spin.transactions.model.PagedResult;
 import com.spin.transactions.model.Transaction;
 import com.spin.transactions.model.TransactionFilter;
