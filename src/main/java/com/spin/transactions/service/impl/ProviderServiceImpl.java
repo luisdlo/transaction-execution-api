@@ -1,15 +1,15 @@
-package com.spin.transactions.provider.impl;
+package com.spin.transactions.service.impl;
 
 import com.spin.transactions.config.ProviderRestClientConfig;
 import com.spin.transactions.model.Transaction;
-import com.spin.transactions.provider.ProviderClient;
-import com.spin.transactions.provider.ProviderExecution;
-import com.spin.transactions.provider.ProviderRejectedException;
-import com.spin.transactions.provider.ProviderUnavailableException;
-import com.spin.transactions.provider.ProviderUnknownStateException;
-import com.spin.transactions.provider.dto.ProviderErrorResponse;
-import com.spin.transactions.provider.dto.ProviderExecuteRequest;
-import com.spin.transactions.provider.dto.ProviderExecuteResponse;
+import com.spin.transactions.service.ProviderService;
+import com.spin.transactions.model.ProviderExecution;
+import com.spin.transactions.exception.ProviderRejectedException;
+import com.spin.transactions.exception.ProviderUnavailableException;
+import com.spin.transactions.exception.ProviderUnknownStateException;
+import com.spin.transactions.dto.provider.ProviderErrorResponse;
+import com.spin.transactions.dto.provider.ProviderExecuteRequest;
+import com.spin.transactions.dto.provider.ProviderExecuteResponse;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,7 +29,7 @@ import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpTimeoutException;
 
 /**
- * HTTP implementation of {@link ProviderClient}.
+ * HTTP implementation of {@link ProviderService}.
  *
  * <p>Uses {@code RestClient.exchange(...)} instead of {@code retrieve()} so every
  * HTTP status code goes through a single dispatch method and every error body is
@@ -38,7 +38,7 @@ import java.net.http.HttpTimeoutException;
  * one exchange lambda keeps the "wire → domain" translation readable in one place.
  */
 @Component
-public class HttpProviderClient implements ProviderClient {
+public class ProviderServiceImpl implements ProviderService {
 
     private static final String EXECUTE_PATH = "/provider/v1/execute";
     private static final String APPROVED_STATUS = "APPROVED";
@@ -47,7 +47,7 @@ public class HttpProviderClient implements ProviderClient {
     private final RestClient restClient;
     private final CircuitBreaker circuitBreaker;
 
-    public HttpProviderClient(@Qualifier(ProviderRestClientConfig.PROVIDER_REST_CLIENT_BEAN)
+    public ProviderServiceImpl(@Qualifier(ProviderRestClientConfig.PROVIDER_REST_CLIENT_BEAN)
                               RestClient restClient,
                               @Qualifier(ProviderRestClientConfig.PROVIDER_CIRCUIT_BREAKER_BEAN)
                               CircuitBreaker circuitBreaker) {

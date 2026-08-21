@@ -7,11 +7,11 @@ import com.spin.transactions.model.TransactionFilter;
 import com.spin.transactions.model.TransactionStatus;
 import com.spin.transactions.repository.TransactionRepository;
 import com.spin.transactions.service.TransactionService;
-import com.spin.transactions.provider.ProviderClient;
-import com.spin.transactions.provider.ProviderExecution;
-import com.spin.transactions.provider.ProviderRejectedException;
-import com.spin.transactions.provider.ProviderUnavailableException;
-import com.spin.transactions.provider.ProviderUnknownStateException;
+import com.spin.transactions.service.ProviderService;
+import com.spin.transactions.model.ProviderExecution;
+import com.spin.transactions.exception.ProviderRejectedException;
+import com.spin.transactions.exception.ProviderUnavailableException;
+import com.spin.transactions.exception.ProviderUnknownStateException;
 import com.spin.transactions.service.rule.TransactionRule;
 import org.springframework.stereotype.Service;
 
@@ -26,16 +26,16 @@ public class DefaultTransactionService implements TransactionService {
 
     private final List<TransactionRule> rules;
     private final TransactionRepository repository;
-    private final ProviderClient providerClient;
+    private final ProviderService providerService;
     private final Clock clock;
 
     public DefaultTransactionService(List<TransactionRule> rules,
                                      TransactionRepository repository,
-                                     ProviderClient providerClient,
+                                     ProviderService providerService,
                                      Clock clock) {
         this.rules = rules;
         this.repository = repository;
-        this.providerClient = providerClient;
+        this.providerService = providerService;
         this.clock = clock;
     }
 
@@ -62,7 +62,7 @@ public class DefaultTransactionService implements TransactionService {
     private Transaction callProviderAndPersistOutcome(Transaction saved) {
         Instant now;
         try {
-            ProviderExecution execution = providerClient.execute(saved);
+            ProviderExecution execution = providerService.execute(saved);
             now = Instant.now(clock);
             return repository.markExecuted(
                     saved.id(),
