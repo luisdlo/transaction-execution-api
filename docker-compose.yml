@@ -29,5 +29,30 @@ services:
       - ./wiremock/__files:/home/wiremock/__files:ro
     command: ["--global-response-templating", "--verbose"]
 
+  app:
+    build: .
+    container_name: spin-app
+    depends_on:
+      postgres:
+        # No arrancamos la app antes de que Postgres acepte conexiones:
+        # Flyway abre conexión al inicio y truena si la BD no está lista.
+        condition: service_healthy
+      wiremock:
+        # WireMock no tiene healthcheck; con service_started basta —
+        # el circuito abierto/timeouts los maneja el propio cliente HTTP
+        # si WireMock tarda en estar listo para tráfico.
+        condition: service_started
+    environment:
+      # Dentro de la red de compose, los hosts son los nombres de servicio
+      # y los puertos son los INTERNOS del contenedor (no los publicados).
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/transactions
+      SPRING_DATASOURCE_USERNAME: transactions
+      SPRING_DATASOURCE_PASSWORD: transactions
+      # WireMock escucha en 8080 dentro del container; en el host se expone
+      # como 8081 pero la app NO usa el host, usa el nombre del servicio.
+      PROVIDER_BASE_URL: http://wiremock:8080
+    ports:
+      - "8080:8080"
+
 volumes:
   postgres-data:
