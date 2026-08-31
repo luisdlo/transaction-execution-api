@@ -5,6 +5,43 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Persisted transaction. Immutable record; each state transition returns a new
+ * instance rather than mutating the existing one.
+ *
+ * <h2>Life cycle</h2>
+ *
+ * <pre>
+ *              rules OK + insert            markExecuted(...)
+ *   (client) ─────────────────▶ PENDING ────────────────────▶ EXECUTED
+ *                                  │
+ *                                  │  markRejected(code, msg) ─▶ REJECTED
+ *                                  │
+ *                                  └─ markFailed(msg) ─────────▶ FAILED
+ * </pre>
+ *
+ * <p>The three terminal states carry different semantics:
+ * <ul>
+ *   <li>{@link TransactionStatus#EXECUTED EXECUTED} — the provider approved
+ *       and returned {@code providerTransactionId} + {@code balanceAfter}.</li>
+ *   <li>{@link TransactionStatus#REJECTED REJECTED} — the provider explicitly
+ *       said no (insufficient funds, blocked account, …). {@code failureCode}
+ *       and {@code failureMessage} are populated; provider-side no charge.</li>
+ *   <li>{@link TransactionStatus#FAILED FAILED} — the outcome is either
+ *       "provider unavailable" (safe to reattempt) or "unknown state"
+ *       (read timeout — the charge may or may not have happened; needs
+ *       reconciliation). Only {@code failureMessage} is set.</li>
+ * </ul>
+ *
+ * <h2>Invariants</h2>
+ * The compact constructor enforces non-null / non-blank fields and
+ * {@code amount &gt; 0}. The transition methods enforce the required extra
+ * fields per target state.
+ *
+ * <h2>Money</h2>
+ * All monetary amounts are {@link BigDecimal} (never {@code double}). Compare
+ * with {@link BigDecimal#compareTo compareTo}, not {@code equals}.
+ */
 public record Transaction(
         UUID id,
         String accountId,

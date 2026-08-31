@@ -98,6 +98,59 @@ Puertos por defecto:
 | OpenAPI spec       | `http://localhost:8080/v3/api-docs`        |
 | Health (K8s probes)| `http://localhost:8080/actuator/health`    |
 
+### Documentación del código
+
+Tres capas de documentación conviven en el repo, cada una con un propósito
+distinto:
+
+| Fuente | Para quién | Cómo verla |
+|---|---|---|
+| **OpenAPI / Swagger UI** | Consumidores del API | `http://localhost:8080/swagger-ui` con la app arriba |
+| **Javadoc** en las clases del contrato | Quien lee/mantiene el código | Directamente en el archivo, o `./mvnw javadoc:javadoc` para generar el sitio en `target/reports/apidocs/` |
+| **Comentarios `//` inline** | Quien revisa una decisión concreta | En el archivo, junto al código que explican |
+
+Los seis puntos de entrada donde el Javadoc te da el contrato completo (invariantes,
+excepciones, semántica de la máquina de estados):
+
+- `service/TransactionService` — orquestación y garantías del método `execute`.
+- `service/rule/TransactionRule` — cómo se añaden reglas, qué garantías tienen.
+- `repository/TransactionRepository` — semántica de `save` con idempotencia y del guard
+  atómico de los `markX`.
+- `model/Transaction` — la máquina de estados y qué campos son válidos por status.
+- `controller/TransactionController` — tabla completa de códigos HTTP y por qué.
+- `dto/request/CreateTransactionRequest` + `dto/response/TransactionResponse` — contrato
+  público, por qué está separado del modelo persistido.
+
+El resto del código sigue la regla del `CLAUDE.md`: **comentar el *por qué*, nunca el
+*qué***. Los métodos no obvios tienen comentarios `//` inline explicando decisiones
+(por ejemplo por qué `DefaultTransactionService.execute` no lleva `@Transactional`),
+en vez de Javadoc que repita el nombre del método.
+
+#### Generar el sitio Javadoc
+
+```bash
+# Genera el sitio HTML en target/reports/apidocs/
+./mvnw javadoc:javadoc
+
+# Abrirlo en el navegador
+open target/reports/apidocs/index.html          # macOS
+xdg-open target/reports/apidocs/index.html      # Linux
+start target/reports/apidocs/index.html         # Windows
+
+# Servirlo en un puerto local (útil si file:// te da problemas)
+cd target/reports/apidocs && python3 -m http.server 9000
+# → http://localhost:9000
+
+# Empaquetarlo en un jar (para deploy a un repo Maven)
+./mvnw javadoc:jar
+# → target/transaction-execution-api-0.0.1-SNAPSHOT-javadoc.jar
+```
+
+El `pom.xml` configura `maven-javadoc-plugin` con `<doclint>all,-missing</doclint>` —
+silencia sólo los warnings de "missing @param" (natural en records con nombres de
+campo auto-descriptivos), sin apagar los demás lints (referencias rotas, HTML mal
+formado). Ver el comentario en el pom para el porqué.
+
 ### Ejecutar una transacción
 
 ```bash

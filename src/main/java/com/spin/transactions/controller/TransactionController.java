@@ -27,6 +27,41 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 import java.util.List;
 
+/**
+ * HTTP boundary for the transactions resource. This is an adapter — no
+ * business logic and no {@code try/catch}: the {@link TransactionService}
+ * makes decisions, and
+ * {@link com.spin.transactions.exception.GlobalExceptionHandler} maps every
+ * exception to a {@code ProblemDetail} (RFC 7807) response.
+ *
+ * <h2>HTTP status conventions</h2>
+ *
+ * <table border="1">
+ *   <caption>HTTP status codes returned by this controller</caption>
+ *   <tr><th>Endpoint</th><th>Code</th><th>Meaning</th></tr>
+ *   <tr><td>{@code POST /transactions}</td><td>{@code 201}</td>
+ *       <td>Transaction persisted (EXECUTED, REJECTED <b>or</b> FAILED).
+ *           A provider rejection is a business outcome, <b>not</b> an HTTP
+ *           error — the client must inspect {@code status} in the body.</td></tr>
+ *   <tr><td>{@code POST /transactions}</td><td>{@code 400}</td>
+ *       <td>Malformed body, invalid enum, {@code @Positive}/{@code @NotBlank}
+ *           violation.</td></tr>
+ *   <tr><td>{@code POST /transactions}</td><td>{@code 422}</td>
+ *       <td>Structurally valid but violates a business rule
+ *           (min amount, debit limit, unsupported currency).</td></tr>
+ *   <tr><td>{@code POST /transactions}</td><td>{@code 409}</td>
+ *       <td>Concurrent state transition on the same row.</td></tr>
+ *   <tr><td>{@code GET /transactions}</td><td>{@code 200}</td>
+ *       <td>Paged result. {@code hasNext} without a {@code COUNT(*)}.</td></tr>
+ *   <tr><td>{@code GET /transactions}</td><td>{@code 400}</td>
+ *       <td>Invalid query parameter (unknown enum, page/limit out of range).</td></tr>
+ * </table>
+ *
+ * <h2>Idempotency</h2>
+ * The optional {@code Idempotency-Key} request header is forwarded to the
+ * service; a repeated POST with the same key and account returns the
+ * pre-existing transaction (same {@code id}), never a new row.
+ */
 @RestController
 @RequestMapping("/transactions")
 @Tag(name = "Transactions", description = "Execute transactions against the external provider and read them back.")
