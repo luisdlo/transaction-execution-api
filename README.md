@@ -68,6 +68,22 @@ docker compose down
 # Bajar TODO INCLUYENDO datos de Postgres. Útil para empezar de cero.
 docker compose down -v
 
+# --- Operar POR SERVICIO (subconjunto de contenedores) --------------------
+# Detener SÓLO la app; postgres y wiremock siguen corriendo.
+docker compose stop app
+
+# Volver a arrancarla sin rebuild (el contenedor sigue creado, sólo parado)
+docker compose start app
+
+# Levantar SÓLO postgres + wiremock (dev loop: la app la corres con ./mvnw).
+# Hay que nombrar los servicios — un `up -d` a secas incluiría también la app.
+docker compose up -d postgres wiremock
+
+# Detener + BORRAR el contenedor de la app (libera el 8080 del host).
+# Útil justo antes de correr `./mvnw spring-boot:run` en local.
+docker compose rm -sf app
+# --------------------------------------------------------------------------
+
 # Reiniciar sólo la app (sin tocar postgres/wiremock)
 docker compose restart app
 
