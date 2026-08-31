@@ -7,22 +7,87 @@ Stack: Java 21 + Spring Boot 4.1 + PostgreSQL 16.
 
 ## Cómo levantarlo
 
-Prerrequisitos: Docker, JDK 21. El wrapper de Maven (`./mvnw`) viene incluido.
+Prerrequisitos: Docker. Para desarrollo local también JDK 21 (el wrapper
+`./mvnw` viene incluido).
+
+### Opción 1 — Todo en Docker
 
 ```bash
-# Postgres 16 y WireMock (proveedor externo simulado)
-docker compose up -d
+docker compose up --build
+```
 
-# Aplicación
+Levanta Postgres 16, WireMock (proveedor externo simulado) **y la app** en
+contenedores. La imagen de la app se construye desde el `Dockerfile` con
+`spring-boot-maven-plugin`, corre como usuario no-root, y respeta el memory
+limit del contenedor con `-XX:MaxRAMPercentage=75.0` (no hardcodea `-Xmx`,
+así escala solo si mañana subes el limit del pod). Puerto expuesto: `8080`.
+
+### Opción 2 — Dependencias en Docker, app en local (dev loop)
+
+```bash
+# Sólo dependencias — hay que nombrar los servicios, un `up -d` a secas
+# levantaría también `app` y chocaría con el 8080 del `mvn spring-boot:run`.
+docker compose up -d postgres wiremock
+
+# App en local con reload rápido
 ./mvnw spring-boot:run
+```
 
+Es el flujo típico durante desarrollo: cambio en Java → `mvn spring-boot:run`
+recompila y arranca en segundos, mientras Postgres y WireMock siguen up en
+segundo plano.
+
+### Tests y smoke
+
+```bash
 # Suite completa: unitarios + integración con Testcontainers + WireMock in-process
 ./mvnw clean install
 
-# Smoke test end-to-end contra la app y WireMock ya levantados:
-# los cuatro escenarios del proveedor + idempotencia + normalización de currency.
-./scripts/smoke-test.sh
+# Smoke tests end-to-end contra una app ya levantada (Opción 1 u Opción 2):
+./scripts/smoke-test.sh                # todos los casos en un solo run
+./scripts/01-approved.sh               # o un caso a la vez, 01..10
 ```
+
+### Ciclo de vida de los contenedores
+
+```bash
+# Ver qué está corriendo
+docker compose ps
+
+# Logs (todos los servicios, o uno específico)
+docker compose logs -f              # todos, follow
+docker compose logs -f app          # sólo la app
+docker compose logs --tail=100 app  # últimas 100 líneas
+
+# Parar SIN borrar los contenedores (conserva estado, arranca rápido con `up`)
+docker compose stop
+
+# Bajar TODO (contenedores + red). Conserva el volumen de Postgres.
+docker compose down
+
+# Bajar TODO INCLUYENDO datos de Postgres. Útil para empezar de cero.
+docker compose down -v
+
+# Reiniciar sólo la app (sin tocar postgres/wiremock)
+docker compose restart app
+
+# Reconstruir la imagen de la app después de un cambio en Java o pom.xml
+docker compose build app           # sólo reconstruye, no arranca
+docker compose up -d --build app   # reconstruye y arranca (recreando el container)
+
+# Reconstruir SIN caché (fuerza a redescargar dependencias, más lento)
+docker compose build --no-cache app
+
+# Borrar la imagen de la app del daemon local (libera espacio)
+docker rmi transaction-execution-api-app
+
+# Limpieza agresiva: contenedores parados + imágenes huérfanas + build cache
+docker system prune -f
+```
+
+Regla mental: durante desarrollo con `docker compose up --build`, sólo cambios en
+`pom.xml` o `src/` invalidan las capas de la imagen. Cambios en otros archivos
+(README, scripts, etc.) reutilizan cache y el rebuild es de segundos.
 
 Puertos por defecto:
 

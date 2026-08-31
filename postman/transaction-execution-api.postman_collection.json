@@ -1,0 +1,681 @@
+{
+  "info": {
+    "name": "Transaction Execution API",
+    "description": "Colección de smoke tests para la Transaction Execution API. Cada carpeta corresponde a un caso de scripts/*.sh. Requiere que la app corra en {{baseUrl}} y WireMock en {{wiremockAdmin}} (docker compose up -d).\n\nCada request tiene un test que valida el resultado esperado. Corre la colección completa con Runner o Newman para ver pass/fail agregado.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "wiremockAdmin", "value": "http://localhost:8081/__admin", "type": "string" },
+    { "key": "idempotencyKey", "value": "k-postman-001", "type": "string" },
+    { "key": "wiremockCountBefore", "value": "0", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "01 — Aprobado",
+      "description": "WireMock devuelve 200 APPROVED para cualquier accountId no listado como especial. Espera HTTP 201 + status=EXECUTED.",
+      "item": [
+        {
+          "name": "POST aprobado (acc-ok)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"acc-ok\",\n  \"type\": \"CREDIT\",\n  \"amount\": 1500.00,\n  \"currency\": \"MXN\",\n  \"description\": \"Test\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('status = EXECUTED', () => pm.expect(body.status).to.eql('EXECUTED'));",
+                  "pm.test('providerTransactionId presente', () => pm.expect(body.providerTransactionId).to.be.a('string').and.not.empty);",
+                  "pm.test('balanceAfter presente', () => pm.expect(body.balanceAfter).to.not.be.null);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Rechazo del proveedor",
+      "description": "acc-fail dispara 400 INSUFFICIENT_FUNDS en WireMock. La API traduce a 201 con status=REJECTED — un rechazo de negocio NO es error HTTP.",
+      "item": [
+        {
+          "name": "POST rechazado (acc-fail)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"acc-fail\",\n  \"type\": \"DEBIT\",\n  \"amount\": 100,\n  \"currency\": \"MXN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 (NO 4xx — es rechazo de negocio)', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('status = REJECTED', () => pm.expect(body.status).to.eql('REJECTED'));",
+                  "pm.test('failureCode = INSUFFICIENT_FUNDS', () => pm.expect(body.failureCode).to.eql('INSUFFICIENT_FUNDS'));",
+                  "pm.test('failureMessage presente', () => pm.expect(body.failureMessage).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Read timeout (no retry)",
+      "description": "acc-slow dispara read timeout. Debe marcarse FAILED y NO reintentar (sólo 1 hit al proveedor).",
+      "item": [
+        {
+          "name": "POST read timeout (acc-slow)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Guarda el contador de WireMock ANTES de la llamada.",
+                  "pm.sendRequest(pm.collectionVariables.get('wiremockAdmin') + '/requests/count', (err, res) => {",
+                  "  pm.collectionVariables.set('wiremockCountBefore', res.json().count);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('status = FAILED', () => pm.expect(body.status).to.eql('FAILED'));",
+                  "",
+                  "// Compara el contador de WireMock: debe haber SUBIDO EXACTAMENTE 1.",
+                  "pm.sendRequest(pm.collectionVariables.get('wiremockAdmin') + '/requests/count', (err, res) => {",
+                  "  const before = parseInt(pm.collectionVariables.get('wiremockCountBefore'));",
+                  "  const after = res.json().count;",
+                  "  const diff = after - before;",
+                  "  pm.test('sólo 1 hit al proveedor (no retry en read timeout)', () => pm.expect(diff).to.eql(1));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"acc-slow\",\n  \"type\": \"CREDIT\",\n  \"amount\": 100,\n  \"currency\": \"MXN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 — Idempotencia",
+      "description": "Dos POST idénticos con el mismo Idempotency-Key devuelven el MISMO id.",
+      "item": [
+        {
+          "name": "POST 1 (fija idempotencyKey único)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Genera una key nueva por corrida de la colección para que el test",
+                  "// no colisione con datos preexistentes.",
+                  "pm.collectionVariables.set('idempotencyKey', 'k-postman-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('id presente', () => pm.expect(body.id).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('firstTxnId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"acc-idem\",\n  \"type\": \"CREDIT\",\n  \"amount\": 200,\n  \"currency\": \"MXN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"]
+            }
+          }
+        },
+        {
+          "name": "POST 2 (mismo body, misma key — debe devolver el mismo id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "const firstId = pm.collectionVariables.get('firstTxnId');",
+                  "pm.test('mismo id que POST 1 (idempotencia)', () => pm.expect(body.id).to.eql(firstId));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"acc-idem\",\n  \"type\": \"CREDIT\",\n  \"amount\": 200,\n  \"currency\": \"MXN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 — Normalización de currency",
+      "description": "Enviar currency=\"mxn\" (minúsculas). El controller normaliza a \"MXN\" antes de persistir; el CHECK constraint de la BD sólo acepta el literal en mayúsculas.",
+      "item": [
+        {
+          "name": "POST currency mxn (lowercase)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"acc-ok\",\n  \"type\": \"CREDIT\",\n  \"amount\": 100,\n  \"currency\": \"mxn\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('currency normalizada a MXN', () => pm.expect(pm.response.json().currency).to.eql('MXN'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 — Reglas de negocio (422)",
+      "description": "Requests bien formados que violan reglas de negocio. GlobalExceptionHandler mapea BusinessRuleViolationException → 422 con code.",
+      "item": [
+        {
+          "name": "DEBIT sobre el límite → DEBIT_LIMIT_EXCEEDED",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"a\",\n  \"type\": \"DEBIT\",\n  \"amount\": 50000,\n  \"currency\": \"MXN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('code = DEBIT_LIMIT_EXCEEDED', () => pm.expect(pm.response.json().code).to.eql('DEBIT_LIMIT_EXCEEDED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "amount bajo el mínimo → AMOUNT_BELOW_MINIMUM",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"a\",\n  \"type\": \"CREDIT\",\n  \"amount\": 0.50,\n  \"currency\": \"MXN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('code = AMOUNT_BELOW_MINIMUM', () => pm.expect(pm.response.json().code).to.eql('AMOUNT_BELOW_MINIMUM'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "currency no soportada → UNSUPPORTED_CURRENCY",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"a\",\n  \"type\": \"CREDIT\",\n  \"amount\": 100,\n  \"currency\": \"USD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('code = UNSUPPORTED_CURRENCY', () => pm.expect(pm.response.json().code).to.eql('UNSUPPORTED_CURRENCY'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 — Errores estructurales (400)",
+      "description": "Requests estructuralmente inválidas. Los cinco caen en handlers distintos del advice y todos deben ser 400 (nunca 500).",
+      "item": [
+        {
+          "name": "amount negativo (@Positive)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"accountId\":\"a\",\"type\":\"CREDIT\",\"amount\":-10,\"currency\":\"MXN\"}" },
+            "url": { "raw": "{{baseUrl}}/transactions", "host": ["{{baseUrl}}"], "path": ["transactions"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('HTTP 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "enum inválido en body (Jackson)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"accountId\":\"a\",\"type\":\"NOPE\",\"amount\":100,\"currency\":\"MXN\"}" },
+            "url": { "raw": "{{baseUrl}}/transactions", "host": ["{{baseUrl}}"], "path": ["transactions"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('HTTP 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "JSON roto (parse error)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{roto" },
+            "url": { "raw": "{{baseUrl}}/transactions", "host": ["{{baseUrl}}"], "path": ["transactions"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('HTTP 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "query param no convertible a enum (?status=NOPE)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transactions?status=NOPE",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"],
+              "query": [{ "key": "status", "value": "NOPE" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('HTTP 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "limit fuera de rango (?limit=500)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transactions?limit=500",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"],
+              "query": [{ "key": "limit", "value": "500" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('HTTP 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 — Query paginada",
+      "description": "GET /transactions con filtros y paginación. hasNext se calcula pidiendo limit+1 filas.",
+      "item": [
+        {
+          "name": "primera página con limit chico",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transactions?limit=3",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"],
+              "query": [{ "key": "limit", "value": "3" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('shape completo (items, page, limit, hasNext)', () => {",
+                  "  pm.expect(body).to.have.property('items');",
+                  "  pm.expect(body).to.have.property('page');",
+                  "  pm.expect(body).to.have.property('limit');",
+                  "  pm.expect(body).to.have.property('hasNext');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "filtrar por status=REJECTED",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transactions?status=REJECTED&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"],
+              "query": [
+                { "key": "status", "value": "REJECTED" },
+                { "key": "limit", "value": "5" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().items;",
+                  "pm.test('todos los items respetan el filtro (o no vinieron items)', () => {",
+                  "  items.forEach(t => pm.expect(t.status).to.eql('REJECTED'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "paginación explícita (page=0, limit=2)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/transactions?status=EXECUTED&limit=2&page=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions"],
+              "query": [
+                { "key": "status", "value": "EXECUTED" },
+                { "key": "limit", "value": "2" },
+                { "key": "page", "value": "0" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('response refleja page=0, limit=2', () => {",
+                  "  pm.expect(body.page).to.eql(0);",
+                  "  pm.expect(body.limit).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "09 — Swagger + Actuator",
+      "description": "Endpoints de documentación (springdoc) y health (K8s probes).",
+      "item": [
+        {
+          "name": "Swagger UI",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/swagger-ui", "host": ["{{baseUrl}}"], "path": ["swagger-ui"] } },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "OpenAPI spec",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/v3/api-docs", "host": ["{{baseUrl}}"], "path": ["v3", "api-docs"] } },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('spec tiene la ruta /transactions', () => {",
+                  "  pm.expect(pm.response.json().paths).to.have.property('/transactions');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health general",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/actuator/health", "host": ["{{baseUrl}}"], "path": ["actuator", "health"] } },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));", "pm.test('status = UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"] } }]
+        },
+        {
+          "name": "Liveness (K8s)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/actuator/health/liveness", "host": ["{{baseUrl}}"], "path": ["actuator", "health", "liveness"] } },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"] } }]
+        },
+        {
+          "name": "Readiness (K8s)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/actuator/health/readiness", "host": ["{{baseUrl}}"], "path": ["actuator", "health", "readiness"] } },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 200', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "10 — Circuit breaker",
+      "description": "⚠ Correr AL FINAL: deja el CB abierto ~10 segundos. Los 4 primeros POST saturan el sliding window; el 5to debe cortarse sin tocar al proveedor.",
+      "item": [
+        {
+          "name": "Saturación 1 (acc-error)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"accountId\":\"acc-error\",\"type\":\"CREDIT\",\"amount\":100,\"currency\":\"MXN\"}" },
+            "url": { "raw": "{{baseUrl}}/transactions", "host": ["{{baseUrl}}"], "path": ["transactions"] }
+          }
+        },
+        {
+          "name": "Saturación 2 (acc-error)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"accountId\":\"acc-error\",\"type\":\"CREDIT\",\"amount\":100,\"currency\":\"MXN\"}" },
+            "url": { "raw": "{{baseUrl}}/transactions", "host": ["{{baseUrl}}"], "path": ["transactions"] }
+          }
+        },
+        {
+          "name": "Saturación 3 (acc-error)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"accountId\":\"acc-error\",\"type\":\"CREDIT\",\"amount\":100,\"currency\":\"MXN\"}" },
+            "url": { "raw": "{{baseUrl}}/transactions", "host": ["{{baseUrl}}"], "path": ["transactions"] }
+          }
+        },
+        {
+          "name": "Saturación 4 (acc-error) + snapshot del contador de WireMock",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Guarda el contador de WireMock DESPUÉS de saturar.",
+                  "pm.sendRequest(pm.collectionVariables.get('wiremockAdmin') + '/requests/count', (err, res) => {",
+                  "  pm.collectionVariables.set('wiremockCountBefore', res.json().count);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"accountId\":\"acc-error\",\"type\":\"CREDIT\",\"amount\":100,\"currency\":\"MXN\"}" },
+            "url": { "raw": "{{baseUrl}}/transactions", "host": ["{{baseUrl}}"], "path": ["transactions"] }
+          }
+        },
+        {
+          "name": "Prueba: CB abierto — NO debe tocar al proveedor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('status = FAILED', () => pm.expect(body.status).to.eql('FAILED'));",
+                  "pm.test('failureMessage menciona circuit', () => pm.expect(body.failureMessage.toLowerCase()).to.include('circuit'));",
+                  "",
+                  "// Verifica que WireMock NO recibió requests durante esta llamada.",
+                  "pm.sendRequest(pm.collectionVariables.get('wiremockAdmin') + '/requests/count', (err, res) => {",
+                  "  const before = parseInt(pm.collectionVariables.get('wiremockCountBefore'));",
+                  "  const after = res.json().count;",
+                  "  pm.test('0 hits al proveedor (CB cortó antes de la red)', () => pm.expect(after - before).to.eql(0));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"accountId\":\"acc-error\",\"type\":\"CREDIT\",\"amount\":100,\"currency\":\"MXN\"}" },
+            "url": { "raw": "{{baseUrl}}/transactions", "host": ["{{baseUrl}}"], "path": ["transactions"] }
+          }
+        }
+      ]
+    }
+  ]
+}

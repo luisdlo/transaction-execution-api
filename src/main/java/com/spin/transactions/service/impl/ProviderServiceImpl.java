@@ -92,11 +92,12 @@ public class ProviderServiceImpl implements ProviderService {
 
     private ProviderExecution doExecute(Transaction transaction) {
         try {
-            return restClient.post()
+            ProviderExecution exchange = restClient.post()
                     .uri(EXECUTE_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(ProviderExecuteRequest.from(transaction))
                     .exchange(this::dispatch);
+            return exchange;
         } catch (ResourceAccessException e) {
             throw translateIoException(e);
         }
