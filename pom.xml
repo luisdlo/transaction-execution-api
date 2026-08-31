@@ -124,6 +124,22 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <!--
+                  Javadoc en modo estricto trata warnings como errores. Los
+                  records disparan "no @param for X" por cada componente aunque
+                  el nombre sea auto-descriptivo — sería ruido documentar 14
+                  componentes de Transaction sólo para silenciar el lint.
+                  `-missing` desactiva SÓLO la familia de warnings de "missing
+                  tag"; el resto del doclint (referencias rotas, HTML mal
+                  formado, etc.) sigue activo.
+                -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <doclint>all,-missing</doclint>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

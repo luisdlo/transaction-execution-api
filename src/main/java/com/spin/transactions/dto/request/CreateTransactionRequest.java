@@ -10,6 +10,18 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.Locale;
 
+/**
+ * Public request contract for {@code POST /transactions}. Validation is done
+ * with Jakarta Bean Validation; any failure surfaces as a {@code 400} through
+ * {@link com.spin.transactions.exception.GlobalExceptionHandler}.
+ *
+ * <p>The record is <b>separate</b> from the domain {@code TransactionCommand}
+ * on purpose: the wire contract and the internal command should be free to
+ * evolve independently. The mapping happens in {@link #toCommand(String)},
+ * which also normalises {@code currency} to upper-case at the boundary — the
+ * DB {@code CHECK} constraint only accepts {@code 'MXN'}, so accepting
+ * lower-case at the HTTP layer would blow up during INSERT.
+ */
 public record CreateTransactionRequest(
         @NotBlank String accountId,
         @NotNull TransactionType type,
