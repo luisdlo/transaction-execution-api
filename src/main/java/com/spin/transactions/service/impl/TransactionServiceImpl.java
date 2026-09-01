@@ -20,7 +20,7 @@ import java.time.Instant;
 import java.util.List;
 
 @Service
-public class DefaultTransactionService implements TransactionService {
+public class TransactionServiceImpl implements TransactionService {
 
     private static final int MAX_LIMIT = 100;
 
@@ -29,7 +29,7 @@ public class DefaultTransactionService implements TransactionService {
     private final ProviderService providerService;
     private final Clock clock;
 
-    public DefaultTransactionService(List<TransactionRule> rules,
+    public TransactionServiceImpl(List<TransactionRule> rules,
                                      TransactionRepository repository,
                                      ProviderService providerService,
                                      Clock clock) {

@@ -139,7 +139,7 @@ excepciones, semántica de la máquina de estados):
 
 El resto del código sigue la regla del `CLAUDE.md`: **comentar el *por qué*, nunca el
 *qué***. Los métodos no obvios tienen comentarios `//` inline explicando decisiones
-(por ejemplo por qué `DefaultTransactionService.execute` no lleva `@Transactional`),
+(por ejemplo por qué `TransactionServiceImpl.execute` no lleva `@Transactional`),
 en vez de Javadoc que repita el nombre del método.
 
 #### Generar el sitio Javadoc

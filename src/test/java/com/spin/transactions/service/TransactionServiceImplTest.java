@@ -1,6 +1,6 @@
 package com.spin.transactions.service;
 
-import com.spin.transactions.service.impl.DefaultTransactionService;
+import com.spin.transactions.service.impl.TransactionServiceImpl;
 
 import com.spin.transactions.exception.BusinessRuleViolationException;
 import com.spin.transactions.model.PagedResult;
@@ -44,7 +44,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class DefaultTransactionServiceTest {
+class TransactionServiceImplTest {
 
     private static final Instant NOW = Instant.parse("2026-03-15T10:30:00Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
@@ -56,11 +56,11 @@ class DefaultTransactionServiceTest {
     @Mock private TransactionRepository repository;
     @Mock private ProviderService providerService;
 
-    private DefaultTransactionService service;
+    private TransactionServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new DefaultTransactionService(
+        service = new TransactionServiceImpl(
                 List.of(ruleA, ruleB, ruleC),
                 repository,
                 providerService,
